@@ -7,7 +7,7 @@ use warnings;
 use JSON;
 use Bio::KBase::Auth;
 use LWP::UserAgent;
-use Digest::SHA1 qw(sha1_base64);
+use Digest::SHA qw(sha1_base64);
 use Crypt::OpenSSL::RSA;
 use Convert::PEM;
 use MIME::Base64;

@@ -3,7 +3,7 @@ package Bio::KBase::AuthUser;
 use strict;
 use warnings;
 use JSON;
-use Digest::SHA1 qw(sha1_base64);
+use Digest::SHA qw(sha1_base64);
 use Bio::KBase::Auth;
 use Bio::KBase::AuthToken;
 use LWP::UserAgent;
