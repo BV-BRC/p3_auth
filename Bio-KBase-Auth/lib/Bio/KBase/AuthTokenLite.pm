@@ -21,6 +21,7 @@ use Object::Tiny::RW qw {
 # This is the name of the environment variable that contains a
 # pregenerated token
 our $TokenEnv = "KB_AUTH_TOKEN";
+our $token_lifetime = 0;
 
 # Your typical constructor - takes a hash that specifies the initial values to
 # plug into the object.
@@ -70,6 +71,7 @@ sub new {
 	    # otherwise set the other attributes and fetch the token
 	    if (exists( $c{ 'authentication.token'})) {
 		$self->token( $c{'authentication.token'});
+		$self->validate();
 	    }
 	}
     };
@@ -78,6 +80,40 @@ sub new {
     }
     return($self);
 }
+
+sub validate {
+    my $self = shift;
+    my %p = @_;
+
+    eval {
+	unless ($self->{'token'}) {
+	    die "No token.";
+	}
+
+	my ($sig_data) = $self->{'token'} =~ /^(.*)\|sig=/;
+	unless ($sig_data) {
+	    die "Token lacks signature fields";
+	}
+	my %vars = map { split /=/ } split /\|/, $self->{'token'};
+	unless (defined($p{'lifetime'})) {
+	    $p{'lifetime'} = $token_lifetime;
+	}
+	unless (($vars{'expiry'} + $p{'lifetime'}) >= time) {
+	    die "Token expired at: ".scalar( localtime($vars{'expiry'} + $p{'lifetime'})) ;
+	}
+	unless (length($vars{'sig'}) == 256) {
+	    die "Token has malformed signature field";
+	}
+    };
+    if ($@) {
+	$self->error_message("Failed to verify token: $@");
+	return( undef);
+    } else {
+	$self->{'error_message'} = undef;
+	return( 1 );
+    }
+}
+
 
 # getter/setter for token, if we are given a token, parse it out
 # and set the appropriate attributes 
