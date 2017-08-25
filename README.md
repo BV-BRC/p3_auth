@@ -21,4 +21,10 @@ There is a default search path for finding tokens:
 
 Parameters to new:
 
+* token
+foo
+
+* ignore_authrc
+bar
+
 	
