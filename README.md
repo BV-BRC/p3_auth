@@ -40,7 +40,23 @@ Don't try to read any flat file for obtaining token data. Used
 on backend services to ignore the execution environment of
 the userid that happens to be running the service.
 
+# Token validation
 
+On the server side we need to validate client tokens. This is provided by the 
+module Bio:P3::Auth::Validate module which exports the single function `validate(token-object)`.
 
+# Token generation
 
-	
+There are several ways to generate new tokens.
+
+1. Via one of the Globus-style token generation services. The original one was at globus.org but we do not
+use that. The RAST project has one that allows RAST credentials to be generated.
+
+2. Via the PATRIC user service. 
+
+Each of these options has a module that encapsulates the code. 
+
+`Bio::P3::Auth::PATRICLogin::login` takes a PATRIC username and password and generates a token.
+
+`Bio::P3::Auth::RASTLogin::login` takes a RAST username and password and generates a token.
+
