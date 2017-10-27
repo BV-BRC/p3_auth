@@ -105,6 +105,14 @@ sub is_token
     return 1;
 }
 
+sub user_id
+{
+    my($self) = @_;
+
+    my($user_id) = $self->{token} =~ /\bun=([^|]+)/;
+    return $user_id;
+}
+
 sub get_token_path
 {
     my($self) = @_;
