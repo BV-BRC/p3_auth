@@ -9,9 +9,9 @@ rarely configured. It also includes validation machinery, including a cache of s
 
 Little of this is needed in normal usage. Thus we define a simple token object:
 
-       use Bio::P3::AuthToken;
+       use P3AuthToken;
 
-       my $token = Bio::P3::AuthToken->new();
+       my $token = P3AuthToken->new();
 
 There is a default search path for finding tokens:
 
@@ -35,6 +35,10 @@ Initialize this token object with the given token string. Used
 in services that have obtained a token by other means (e.g. 
 HTTP headers) and need to create a token object.
 
+* ignore_environment  
+Don't try to read an environment variable for oobtaining token data. Used
+in command line login scripts.
+
 * ignore_authrc  
 Don't try to read any flat file for obtaining token data. Used
 on backend services to ignore the execution environment of
@@ -56,7 +60,10 @@ use that. The RAST project has one that allows RAST credentials to be generated.
 
 Each of these options has a module that encapsulates the code. 
 
-`Bio::P3::Auth::PATRICLogin::login` takes a PATRIC username and password and generates a token.
+`P3AuthLogin::login_patric` takes a PATRIC username and password and generates a token.
 
-`Bio::P3::Auth::RASTLogin::login` takes a RAST username and password and generates a token.
+`P3AuthLogin::login_rast` takes a RAST username and password and generates a token.
+
+`P3AuthLogin::login` attempts a PATRIC login if the username ends with @patricbrc.org; otherwise 
+it attempts a RAST login.p
 

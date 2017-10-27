@@ -1,4 +1,4 @@
-package Bio::KBase::AuthConstants;
+package P3AuthConstants;
 
 use constant        globus_token_url   => '[% globus_token_url %]';
 use constant        globus_profile_url   => '[% globus_profile_url %]';

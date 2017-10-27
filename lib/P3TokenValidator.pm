@@ -1,4 +1,4 @@
-package Bio::P3::Auth::Validator;
+package P3AuthValidator;
 
 use Data::Dumper;
 use LWP::UserAgent;

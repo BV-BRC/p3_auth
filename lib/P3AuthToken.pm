@@ -1,6 +1,6 @@
-package Bio::P3::AuthToken;
+package P3AuthToken;
 
-=head1 Bio::P3::AuthToken
+=head1 P3AuthToken
 
 This module defines a simple authorization token wrapper for
 the PATRIC command line interface.
@@ -23,11 +23,12 @@ sub new
     my $self = {
 	token => $params{token},
 	ignore_authrc => $params{ignore_authrc},
+	ignore_environment => $params{ignore_environment},
     };
 
     $self = bless $self, $class;
 
-    if (!$self->token)
+    if (!$self->token && !$self->ignore_environment)
     {
 	$self->initialize_token_from_environment();
     }
@@ -159,6 +160,16 @@ sub ignore_authrc
 	$self->{ignore_authrc} = $val;
     }
     $self->{ignore_authrc};
+}
+
+sub ignore_environment
+{
+    my($self, $val) = @_;
+    if (defined($val))
+    {
+	$self->{ignore_environment} = $val;
+    }
+    $self->{ignore_environment};
 }
 
 1;
