@@ -1,10 +1,11 @@
-package P3AuthValidator;
+package P3TokenValidator;
 
 use Data::Dumper;
 use LWP::UserAgent;
 use strict;
 use JSON::XS;
 use Crypt::OpenSSL::RSA;
+use P3AuthConstants ':all';
 
 sub new
 {
@@ -17,6 +18,7 @@ sub new
 	ua => $ua,
 	pubkey_cache => {},
 	cache_lifetime => 10,
+	token_signers => { map { $_ => 1 } trust_token_signers },
     };
     return bless $self, $class;
 }
@@ -29,22 +31,39 @@ sub validate
     
     my($sig_data) = $token_str =~ /^(.*)\|sig=/;
 
-    $sig_data or return 0;
+    if (!$sig_data)
+    {
+	return wantarray ? (undef, "Missing signature data") : undef;
+    }
 
     my %vars = map { split /=/ } split /\|/, $token->token();
     
-    return 0 if time >= $vars{expiry};
+    if (time >= $vars{expiry})
+    {
+	return wantarray ? (undef, "Token expired") : undef;
+    }
     
     my $signer = $vars{SigningSubject};
+    unless ($self->{token_signers}->{$signer})
+    {
+	return wantarray ? (undef, "Token signed by unknown signer $signer") : undef;
+    }
 
     my $pubkey = $self->get_pubkey($signer);
-    return undef unless $pubkey;
+    unless($pubkey)
+    {
+	return wantarray ? (undef, "Could not retrieve signer pubkey for $signer") : undef;
+    }
     
     my $binary_sig = pack('H*',$vars{'sig'});
 
     my $verify = $pubkey->verify($sig_data, $binary_sig);
+    if (!$verify)
+    {
+	return wantarray ? (undef, "Token signature did not verify") : undef;
+    }
 
-    return $verify;
+    return wantarray ? ($verify, "") : $verify;
 }
 
 sub get_pubkey
