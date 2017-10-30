@@ -1,8 +1,0 @@
-Revision history for Bio-KBase-Auth
-
-0.02    8/15/2012
-        First production oriented version. Based on Globus Online's python-nexus-client
-        libraries available at https://github.com/globusonline/python-nexus-client.git
-
-
-

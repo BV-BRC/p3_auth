@@ -1,7 +1,0 @@
-
-   The files in this directory are intended to support python development with the Globus Online authentication tokens.
-
-   The oauth.py file is a django middleware module that provides a "remote_user" type support for Django using the oauth tokens issued by GO
-
-   The python-nexus-client directory is a snapshot of the Globus Online python-nexus-client that was reverse engineered to create the Perl libraries. The source git repo is https://github.com/globusonline/python-nexus-client.git
-

@@ -51,12 +51,7 @@ deploy: build-libs deploy-libs deploy-docs deploy-scripts
 
 build-libs:
 	-mkdir lib;
-	$(TPAGE) $(TPAGE_ARGS) Constants.pm.tt > Bio-KBase-Auth/lib/Bio/KBase/AuthConstants.pm
-	cd Bio-KBase-Auth; \
-	$(TOP_ABS)/runtime/bin/perl ./Build.PL ; \
-	cd ..; \
-	rsync -arvC python-libs/biokbase lib/ ; \
-	rsync -arvC Bio-KBase-Auth/lib/Bio lib/ ;
+	$(TPAGE) $(TPAGE_ARGS) Constants.pm.tt > lib/P3AuthConstants.pm
 
 # this target is now included from Makefile.common.rules 
 #deploy-libs: build-libs

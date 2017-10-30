@@ -1,63 +1,63 @@
-### Dependencies
+PATRIC3 authentication support
 
-* External Package
+Authentication in the PATRIC system uses oauth style bearer tokens.
 
-* Required Perl libs (install using cpan)
-    * Object::Tiny::RW
-    * JSON
-    * REST::Client
-    * Digest::SHA1
-    * Crypt::OpenSSL::RSA
-    * Crypt::OpenSSL::X509
-    * URI::Escape
-    * URI::QueryParam
-    * MIME::Base64
-    * HTTP::Request
-    * HTTP::Daemon
-    * LWP::UserAgent
-    * Net::OAuth
-    * URI::Escape
-    * Carp
-    * Data::Dumper
-    * Test::More
-    * Crypt::SSLeay
-    * Test::Deep::NoTest
-    * Storable
-    * Email::Valid
+# Basic token access
 
-### Google Doc for API
+Current interface uses Bio::KBase::AuthToken. It is highly configurable, but is 
+rarely configured. It also includes validation machinery, including a cache of signer keys.
 
-   Perl libraries have built in perldocs. The authentication libraries use
-Globus Online's Nexus service for authentication. User accounts can be
-registered at:
+Little of this is needed in normal usage. Thus we define a simple token object:
 
-https://www.globusonline.org/SignUp
+       use P3AuthToken;
 
-   There is a developer tutorial at:
+       my $token = P3AuthToken->new();
 
-http://www.kbase.us/developer-zone/tutorials/developer-tutorials/kbase-authentication/
+There is a default search path for finding tokens:
 
-### Setup using the kbase VMs
-=======
-0.  Start the VM (aka Magellan instance) and get on it as user ubuntu
-    nova boot .... (options will change over time)
-    ssh ubuntu@<vm host>
+1. P3_AUTH_TOKEN environment variable. Holds string of bearer token.
 
-(You will need an account on git.kbase.us--see https://trac.kbase.us/projects/kbase/wiki/SourceCodeVersionControlAndRelatedConfigurationManagement
-for instructions on how to obtain one.)
+2. File .patric_token in user's home directory
 
-1. Clone the dev_container repo as root, then cd to dev_container/modules and (still as root) clone the auth repo.
-   sudo bash
-   cd /kb
-   git clone kbase@git.kbase.us:/dev_container.git
-   [Note: when it asks for your passphrase, use your personal kbase passphrase--you don't need to know root's.]
-   cd dev_container/modules
-   git clone kbase@git.kbase.us:/auth.git
-   cd ..
-   ./bootstrap /kb/runtime
-   . user-env.sh
+This module does *not* attempt to retrieve a token based on username information or to perform validation. 
+It is purely a lightweight mechanism for retrieving a token from the standard location.
 
-2. As root do a make deploy. This will install the perl libraries
+## Parameters to new:
 
-3. Run tests for the perl libraries
-   make test
+* token  
+Initialize this token object with the given token string. Used
+in services that have obtained a token by other means (e.g. 
+HTTP headers) and need to create a token object.
+
+* ignore_environment  
+Don't try to read an environment variable for oobtaining token data. Used
+in command line login scripts.
+
+* ignore_authrc  
+Don't try to read any flat file for obtaining token data. Used
+on backend services to ignore the execution environment of
+the userid that happens to be running the service.
+
+# Token validation
+
+On the server side we need to validate client tokens. This is provided by the 
+module Bio:P3::Auth::Validate module which exports the single function `validate(token-object)`.
+
+# Token generation
+
+There are several ways to generate new tokens.
+
+1. Via one of the Globus-style token generation services. The original one was at globus.org but we do not
+use that. The RAST project has one that allows RAST credentials to be generated.
+
+2. Via the PATRIC user service. 
+
+Each of these options has a module that encapsulates the code. 
+
+`P3AuthLogin::login_patric` takes a PATRIC username and password and generates a token.
+
+`P3AuthLogin::login_rast` takes a RAST username and password and generates a token.
+
+`P3AuthLogin::login` attempts a PATRIC login if the username ends with @patricbrc.org; otherwise 
+it attempts a RAST login.p
+
