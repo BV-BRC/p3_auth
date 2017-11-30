@@ -47,7 +47,9 @@ all: build-libs bin
 
 bin: $(BIN_PERL)
 
-deploy: build-libs deploy-libs deploy-docs deploy-scripts
+deploy: deploy-client
+deploy-client: build-libs deploy-libs deploy-docs deploy-scripts
+deploy-service: 
 
 build-libs:
 	-mkdir lib;
