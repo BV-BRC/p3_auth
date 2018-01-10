@@ -11,7 +11,7 @@ my $ua_timeout = 10;
 
 =head1 PATRIC User Login Utilities
 
-This module contains routines for obtaining authentication toekns
+This module contains routines for obtaining authentication tokens
 from either the PATRIC or RAST authentication services.
 
 =head2 Utility Routines
