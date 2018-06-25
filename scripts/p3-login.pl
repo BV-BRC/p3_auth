@@ -42,6 +42,7 @@ my($opt, $usage) = describe_options("%c %o username",
 				    ['status|whoami|s', 'display login status'],
 				    ['rast', 'create a RAST login token'],
 				    ['verbose|v', 'display debugging info'],
+				    ['su=s', 'get a token for this user', { hidden => 1 }],
 				    ['help|h', 'display usage information', { shortcircuit => 1 }]);
 print($usage->text), exit 0 if $opt->help;
 
@@ -97,7 +98,7 @@ if (! $opt->status && ! $opt->logout) {
     {
         my $password = get_pass();
 
-	perform_login($username, $password);
+	perform_login($username, $password, $opt->su);
     }
 
     die "Too many incorrect login attempts; exiting.\n";
@@ -105,7 +106,7 @@ if (! $opt->status && ! $opt->logout) {
 
 sub perform_login
 {
-    my($username, $password) = @_;
+    my($username, $password, $target_user) = @_;
 
     my $token;
     if ($opt->rast)
@@ -119,7 +120,14 @@ sub perform_login
 	#
 	# the P3AuthLogin code does suffix trimming on the username.
 	eval {
-	    $token = P3AuthLogin::login_patric($username, $password);
+	    if ($target_user)
+	    {
+		$token = P3AuthLogin::sulogin_patric($username, $password, $target_user);
+	    }
+	    else
+	    {
+		$token = P3AuthLogin::login_patric($username, $password);
+	    }
 	};
     }
     

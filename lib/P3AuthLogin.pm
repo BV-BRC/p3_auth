@@ -56,6 +56,47 @@ sub login_patric
     return $token;
 }
 
+=head3 sulogin_patric
+
+    $token = P3AuthLogin::sulogin_patric($username, $password, $target_user)
+
+Create a PATRIC authentication token for the target user using the given username and password.
+User must be an administrator.
+
+Dies on failure to log in.    
+
+=cut
+
+sub sulogin_patric
+
+{
+    my($user, $pass, $target_user) = @_;
+
+    my $token;
+    
+    #
+    # Trim the @patricbrc.org suffix if present.
+    #
+    
+    $user =~ s/^\@patricbrc.org$//;
+
+    my $content = { username => $user, password => $pass, targetUser => $target_user };
+
+    my $ua = LWP::UserAgent->new();
+    $ua->timeout($ua_timeout);
+    my $res = $ua->post("$patric_authentication_url/sulogin", $content);
+    if ($res->is_success)
+    {
+	$token = $res->content;
+    }
+    else
+    {
+	die "Login failed";
+    }
+
+    return $token;
+}
+
 =head3 login_rast
 
     $token = P3AuthLogin::login_rast($username, $password)
