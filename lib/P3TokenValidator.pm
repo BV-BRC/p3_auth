@@ -17,7 +17,7 @@ sub new
     my $self = {
 	ua => $ua,
 	pubkey_cache => {},
-	cache_lifetime => 10,
+	cache_lifetime => 86400,
 	token_signers => { map { $_ => 1 } trust_token_signers },
     };
     return bless $self, $class;
@@ -100,7 +100,7 @@ sub get_pubkey
     }
     $pubkey->use_sha1_hash();
 
-    $self->{pubkey_hash}->{$url} = { expires => (time + $self->{cache_lifetime}),
+    $self->{pubkey_cache}->{$url} = { expires => (time + $self->{cache_lifetime}),
 				     pubkey => $pubkey };
     return $pubkey;
 }
