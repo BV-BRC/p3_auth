@@ -2,7 +2,7 @@ package P3AuthConstants;
 
 use constant        globus_token_url   => 'http://rast.nmpdr.org/goauth/token?grant_type=client_credentials';
 use constant        globus_profile_url   => 'http://rast.nmpdr.org/users';
-use constant	    trust_token_signers => split(/\s+/, 'https://rast.nmpdr.org/goauth/keys https://user.alpha.patricbrc.org/public_key https://nexus.api.globusonline.org/goauth/keys https://user.patricbrc.org/public_key');
+use constant	    trust_token_signers => split(/\s+/, 'https://rast.nmpdr.org/goauth/keys https://user.alpha.patricbrc.org/public_key https://nexus.api.globusonline.org/goauth/keys https://user.patricbrc.org/public_key https://user.beta.patricbrc.org/public_key');
 use constant	    role_service_url => 'https://kbase.us/services/authorization/Roles';
 
 use base 'Exporter';

@@ -9,7 +9,7 @@ LIB_PERL = $(wildcard Bio-KBase-Auth/lib/Bio/KBase/*.pm)
 
 GLOBUS_TOKEN_URL = http://rast.nmpdr.org/goauth/token?grant_type=client_credentials
 GLOBUS_PROFILE_URL = http://rast.nmpdr.org/users
-TRUST_TOKEN_SIGNERS = https://rast.nmpdr.org/goauth/keys https://user.alpha.patricbrc.org/public_key https://nexus.api.globusonline.org/goauth/keys https://user.patricbrc.org/public_key
+TRUST_TOKEN_SIGNERS = https://rast.nmpdr.org/goauth/keys https://user.alpha.patricbrc.org/public_key https://nexus.api.globusonline.org/goauth/keys https://user.patricbrc.org/public_key https://user.beta.patricbrc.org/public_key
 
 
 #GLOBUS_TOKEN_URL = https://nexus.api.globusonline.org/goauth/token?grant_type=client_credentials

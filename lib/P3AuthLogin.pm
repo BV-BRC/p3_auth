@@ -27,7 +27,6 @@ Dies on failure to log in.
 =cut
 
 sub login_patric
-
 {
     my($user, $pass) = @_;
 
@@ -95,6 +94,34 @@ sub sulogin_patric
     }
 
     return $token;
+}
+
+=head3 refresh_patric_token
+
+    $token = P3AuthLogin::refresh_patric_token($token)
+
+Assuming L<$token> is still valid,  use the P3 user service to create
+a refreshed longer-lived token.
+
+=cut
+
+sub refresh_patric_token
+{
+    my($token) = @_;
+
+    my $ua = LWP::UserAgent->new();
+    $ua->timeout($ua_timeout);
+    my $res = $ua->get("$patric_authentication_url/refresh", "Authorization", $token);
+    if ($res->is_success)
+    {
+	$token = $res->content;
+    }
+    else
+    {
+	die "Refresh failed";
+    }
+
+
 }
 
 =head3 login_rast
