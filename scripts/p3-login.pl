@@ -98,6 +98,10 @@ if (! $opt->status && ! $opt->logout) {
     {
         my $password = get_pass();
 
+	if (!defined($password))
+	{
+	    exit 1;
+	}	    
 	perform_login($username, $password, $opt->su);
     }
 
@@ -175,8 +179,13 @@ sub get_pass {
         print "Password: ";
         ReadMode(4);
         while ( ord($key = ReadKey(0)) != 10 ) {
+	    
             # While Enter has not been pressed
-            if (ord($key) == 127 || ord($key) == 8) {
+	    if (!defined($key))
+	    {
+		last;
+	    }
+            elsif (ord($key) == 127 || ord($key) == 8) {
                 chop $pass;
                 print "\b \b";
             } elsif (ord($key) < 32) {
