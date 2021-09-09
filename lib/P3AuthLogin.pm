@@ -11,7 +11,7 @@ my $ua_timeout = 10;
 
 =head1 PATRIC User Login Utilities
 
-This module contains routines for obtaining authentication toekns
+This module contains routines for obtaining authentication tokens
 from either the PATRIC or RAST authentication services.
 
 =head2 Utility Routines
@@ -27,7 +27,6 @@ Dies on failure to log in.
 =cut
 
 sub login_patric
-
 {
     my($user, $pass) = @_;
 
@@ -54,6 +53,75 @@ sub login_patric
     }
 
     return $token;
+}
+
+=head3 sulogin_patric
+
+    $token = P3AuthLogin::sulogin_patric($username, $password, $target_user)
+
+Create a PATRIC authentication token for the target user using the given username and password.
+User must be an administrator.
+
+Dies on failure to log in.    
+
+=cut
+
+sub sulogin_patric
+
+{
+    my($user, $pass, $target_user) = @_;
+
+    my $token;
+    
+    #
+    # Trim the @patricbrc.org suffix if present.
+    #
+    
+    $user =~ s/^\@patricbrc.org$//;
+
+    my $content = { username => $user, password => $pass, targetUser => $target_user };
+
+    my $ua = LWP::UserAgent->new();
+    $ua->timeout($ua_timeout);
+    my $res = $ua->post("$patric_authentication_url/sulogin", $content);
+    if ($res->is_success)
+    {
+	$token = $res->content;
+    }
+    else
+    {
+	die "Login failed";
+    }
+
+    return $token;
+}
+
+=head3 refresh_patric_token
+
+    $token = P3AuthLogin::refresh_patric_token($token)
+
+Assuming L<$token> is still valid,  use the P3 user service to create
+a refreshed longer-lived token.
+
+=cut
+
+sub refresh_patric_token
+{
+    my($token) = @_;
+
+    my $ua = LWP::UserAgent->new();
+    $ua->timeout($ua_timeout);
+    my $res = $ua->get("$patric_authentication_url/refresh", "Authorization", $token);
+    if ($res->is_success)
+    {
+	$token = $res->content;
+    }
+    else
+    {
+	die "Refresh failed";
+    }
+
+
 }
 
 =head3 login_rast

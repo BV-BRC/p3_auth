@@ -113,6 +113,22 @@ sub user_id
     return $user_id;
 }
 
+sub is_admin
+{
+    my($self) = @_;
+    return $self->{token} =~ /\|scope=user\|/ &&
+	$self->{token} =~ /\|roles=admin\|/;
+}
+
+sub expiry
+{
+    my($self) = @_;
+
+    my($exp) = $self->{token} =~ /\bexpiry=(\d+)/;
+
+    return $exp;
+}
+
 sub get_token_path
 {
     my($self) = @_;
