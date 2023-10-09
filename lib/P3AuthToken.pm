@@ -113,6 +113,14 @@ sub user_id
     return $user_id;
 }
 
+sub signature
+{
+    my($self) = @_;
+
+    my($sig) = $self->{token} =~ /\bsig=([^|]+)/;
+    return $sig;
+}
+
 sub is_admin
 {
     my($self) = @_;

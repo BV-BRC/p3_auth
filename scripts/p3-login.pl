@@ -1,8 +1,8 @@
-=head1 Create a PATRIC login token.
+=head1 Create a BV-BRC login token.
 
     p3-login [options] username
 
-Create a PATRIC login token, used with workspace operations. To use this script, specify your user name on
+Create a BV-BRC login token, used with workspace operations. To use this script, specify your user name on
 the command line as a positional parameter. You will be asked for your password.
 
 The following command-line options are supported.
@@ -24,7 +24,7 @@ If the command-line option C<--logout> is specified, you will be logged out. In 
 =cut
 
 #
-# Create a PATRIC login token.
+# Create a BV-BRC login token.
 #
 
 use strict;
@@ -38,11 +38,11 @@ use P3AuthLogin;
 my $max_tries = 3;
 
 my($opt, $usage) = describe_options("%c %o username",
-				    ['logout|logoff', 'log out of PATRIC'],
+				    ['logout|logoff', 'log out of BV-BRC'],
 				    ['status|whoami|s', 'display login status'],
 				    ['rast', 'create a RAST login token'],
 				    ['verbose|v', 'display debugging info'],
-				    ['su=s', 'get a token for this user', { hidden => 1 }],
+				    ['sudo=s', 'get a token for this user', { hidden => 1 }],
 				    ['help|h', 'display usage information', { shortcircuit => 1 }]);
 print($usage->text), exit 0 if $opt->help;
 
@@ -60,7 +60,7 @@ if ($opt->status || $opt->verbose) {
     my $token_str = $token->token();
     
     if (!$token_str) {
-        print "You are currently logged out of PATRIC.\n";
+        print "You are currently logged out of BV-BRC.\n";
     } else {
 	my($token_user) = $token_str =~ /\bun=([^|]+)/;
 
@@ -68,14 +68,14 @@ if ($opt->status || $opt->verbose) {
 	{
 	    if ($token_user =~ /^(.*)\@patricbrc.org$/)
 	    {
-		print "You are logged in as PATRIC user $1\n";
+		print "You are logged in as BV-BRC user $1\n";
 	    }
 	    else
 	    {
 		print "You are logged in as RAST user $token_user\n";
 	    }
         } else {
-            die "Your PATRIC login token is improperly formatted. Please log out and try again.";
+            die "Your BV-BRC login token is improperly formatted. Please log out and try again.";
         }
     }
 }
@@ -83,11 +83,13 @@ if ($opt->status || $opt->verbose) {
 if ($opt->logout) {
     if (-f $token_path) {
         unlink($token_path) || die "Could not delete login file $token_path: $!";
-        print "Logged out of PATRIC.\n";
+        print "Logged out of BV-BRC.\n";
     } else {
-        print "You are already logged out of PATRIC.\n";
+        print "You are already logged out of BV-BRC.\n";
     }
 }
+
+my $token;
 
 if (! $opt->status && ! $opt->logout) {
     if (! $username) {
@@ -102,10 +104,34 @@ if (! $opt->status && ! $opt->logout) {
 	{
 	    exit 1;
 	}	    
-	perform_login($username, $password, $opt->su);
+	$token = perform_login($username, $password, $opt->sudo);
+	last if $token;
     }
 
-    die "Too many incorrect login attempts; exiting.\n";
+    die "Too many incorrect login attempts; exiting.\n" unless $token;
+
+    my($user) = $token =~ /un=([^|]+)/;
+
+    if ($opt->sudo)
+    {
+	#
+	# For sudo, create a new user shell with P3_AUTH_TOKEN set to our new token.
+	#
+	$ENV{P3_AUTH_TOKEN} = $ENV{KB_AUTH_TOKEN} = $token;
+	my $shell = $ENV{SHELL} // "/bin/bash";
+	print STDERR "Starting shell with BV-BRC login environment for $user\nType \"exit\" to return to normal environment\n";
+	system($shell);
+    }
+    else
+    {
+	open(T, ">", $token_path) or die "Cannot write token file $token_path: $!\n";
+	print T "$token\n";
+	# Protect the chmod with eval so it won't blow up in Windows.
+	eval { chmod 0600, \*T; };
+	close(T);
+	
+	print "Logged in with username $user\n";
+    }
 }
 
 sub perform_login
@@ -137,19 +163,7 @@ sub perform_login
     
     if ($token)
     {
-	if ($token =~ /un=([^|]+)/)
-	{
-	    my $un = $1;
-	    open(T, ">", $token_path) or die "Cannot write token file $token_path: $!\n";
-	    print T "$token\n";
-	    # Protect the chmod with eval so it won't blow up in Windows.
-	    eval { chmod 0600, \*T; };
-	    close(T);
-
-	    print "Logged in with username $un\n";
-	    exit(0);
-	}
-	else
+	if ($token !~ /un=([^|]+)/)
 	{
 	    die "Token has unexpected format\n";
 	}
@@ -158,6 +172,7 @@ sub perform_login
     {
 	print "Sorry, try again.\n";
     }
+    return $token;
 }
 
 sub get_pass {
