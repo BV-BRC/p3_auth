@@ -44,12 +44,12 @@ It is purely a lightweight mechanism for retrieving a token from the standard lo
   on backend services to ignore the execution environment of
   the userid that happens to be running the service.
 
-# Token validation
+## Token validation
 
 On the server side we need to validate client tokens. This is provided by the
 module Bio:P3::Auth::Validate module which exports the single function `validate(token-object)`.
 
-# Token generation
+## Token generation
 
 There are several ways to generate new tokens.
 
