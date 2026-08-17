@@ -3,6 +3,7 @@ package P3AuthLogin;
 use strict;
 use LWP::UserAgent;
 use JSON::PP;
+use P3ClientUA;
 
 my $patric_authentication_url = "https://user.patricbrc.org/authenticate";
 my $rast_authentication_url = "http://rast.nmpdr.org/goauth/token?grant_type=client_credentials";
@@ -40,8 +41,7 @@ sub login_patric
 
     my $content = { username => $user, password => $pass };
 
-    my $ua = LWP::UserAgent->new();
-    $ua->timeout($ua_timeout);
+    my $ua = P3ClientUA::new_ua(timeout => $ua_timeout);
     my $res = $ua->post($patric_authentication_url,$content);
     if ($res->is_success)
     {
@@ -49,7 +49,7 @@ sub login_patric
     }
     else
     {
-	die "Login failed";
+	_fail($res, "Login");
     }
 
     return $token;
@@ -81,8 +81,7 @@ sub sulogin_patric
 
     my $content = { username => $user, password => $pass, targetUser => $target_user };
 
-    my $ua = LWP::UserAgent->new();
-    $ua->timeout($ua_timeout);
+    my $ua = P3ClientUA::new_ua(timeout => $ua_timeout);
     my $res = $ua->post("$patric_authentication_url/sulogin", $content);
     if ($res->is_success)
     {
@@ -90,7 +89,7 @@ sub sulogin_patric
     }
     else
     {
-	die "Login failed";
+	_fail($res, "Login");
     }
 
     return $token;
@@ -109,8 +108,7 @@ sub refresh_patric_token
 {
     my($token) = @_;
 
-    my $ua = LWP::UserAgent->new();
-    $ua->timeout($ua_timeout);
+    my $ua = P3ClientUA::new_ua(timeout => $ua_timeout);
     my $res = $ua->get("$patric_authentication_url/refresh", "Authorization", $token);
     if ($res->is_success)
     {
@@ -118,7 +116,7 @@ sub refresh_patric_token
     }
     else
     {
-	die "Refresh failed";
+	_fail($res, "Refresh");
     }
 
 
@@ -140,8 +138,7 @@ sub login_rast
 
     my $token;
 
-    my $ua = LWP::UserAgent->new();
-    $ua->timeout($ua_timeout);
+    my $ua = P3ClientUA::new_ua(timeout => $ua_timeout);
 
     my $headers = HTTP::Headers->new;
 
@@ -155,10 +152,26 @@ sub login_rast
     }
     else
     {
-	die "Login failed";
+	_fail($res, "Login");
     }
 
     return $token;
+}
+
+#
+# Report a failed authentication request and die.
+#
+# The message carries the status, and for a Cloudflare rejection the CF-Ray id
+# that support needs; P3_DEBUG_HTTP=1 additionally dumps the full (redacted)
+# headers. See L<P3ClientUA>.
+#
+sub _fail
+{
+    my($res, $what) = @_;
+
+    P3ClientUA::dump_http_failure($res, \*STDERR) if P3ClientUA::debug_enabled();
+
+    die P3ClientUA::http_failure_message($res, $what);
 }
 
 1;
