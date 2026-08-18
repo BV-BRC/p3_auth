@@ -37,16 +37,28 @@ use P3AuthLogin;
 
 my $max_tries = 3;
 
+#
+# Last failure reported by P3AuthLogin, so it can be repeated when we give up.
+#
+my $last_login_error;
+
 my($opt, $usage) = describe_options("%c %o username",
 				    ['logout|logoff', 'log out of BV-BRC'],
 				    ['status|whoami|s', 'display login status'],
 				    ['rast', 'create a RAST login token'],
 				    ['verbose|v', 'display debugging info'],
+				    ['debug-http', 'dump the HTTP headers of a failed login (same as setting P3_DEBUG_HTTP)'],
 				    ['sudo=s', 'get a token for this user', { hidden => 1 }],
 				    ['help|h', 'display usage information', { shortcircuit => 1 }]);
 print($usage->text), exit 0 if $opt->help;
 
 my $username = shift;
+
+#
+# P3ClientUA reads this, so the flag reaches the login code and anything else
+# it calls without having to thread an option through.
+#
+$ENV{P3_DEBUG_HTTP} = 1 if $opt->debug_http || $opt->verbose;
 
 my $token = P3AuthToken->new(ignore_environment => 1);
 
@@ -108,7 +120,15 @@ if (! $opt->status && ! $opt->logout) {
 	last if $token;
     }
 
-    die "Too many incorrect login attempts; exiting.\n" unless $token;
+    if (!$token)
+    {
+	#
+	# Repeat the underlying failure; without this the reason (bad password,
+	# service down, Cloudflare block) is lost behind the attempt count.
+	#
+	print STDERR $last_login_error if $last_login_error;
+	die "Too many incorrect login attempts; exiting.\n";
+    }
 
     my($user) = $token =~ /un=([^|]+)/;
 
@@ -160,7 +180,8 @@ sub perform_login
 	    }
 	};
     }
-    
+    $last_login_error = $@;
+
     if ($token)
     {
 	if ($token !~ /un=([^|]+)/)
@@ -170,6 +191,11 @@ sub perform_login
     }
     else
     {
+	#
+	# Show why. P3AuthLogin reports the HTTP status, and for a Cloudflare
+	# rejection the CF-Ray id; a bad password is just a 401 from our service.
+	#
+	print STDERR $last_login_error if $last_login_error;
 	print "Sorry, try again.\n";
     }
     return $token;

@@ -6,13 +6,13 @@ use strict;
 use JSON::XS;
 use Crypt::OpenSSL::RSA;
 use P3AuthConstants ':all';
+use P3ClientUA;
 
 sub new
 {
     my($class) = @_;
 
-    my $ua = LWP::UserAgent->new;
-    $ua->timeout(10);
+    my $ua = P3ClientUA::new_ua(timeout => 10);
 
     my $self = {
 	ua => $ua,
