@@ -4,7 +4,7 @@ use strict;
 use LWP::UserAgent;
 use Exporter 'import';
 
-our @EXPORT_OK = qw(new_ua user_agent_string debug_enabled
+our @EXPORT_OK = qw(new_ua user_agent_string set_product product_string debug_enabled
 		    is_cloudflare_block http_failure_message dump_http_failure);
 
 #
@@ -12,7 +12,21 @@ our @EXPORT_OK = qw(new_ua user_agent_string debug_enabled
 # user-agents outright (error 1010). LWP's default is one of them, so every
 # client in this tree must present an allowlisted agent string instead.
 #
+# This is the fallback identity, used by any client that has not said which
+# product it is (see set_product).
+#
 our $default_user_agent = "BV-BRC P3 Client";
+
+#
+# The product making the request, e.g. "bvbrc-cli-perl", and its version.
+#
+# The version is deliberately not defined anywhere in this tree: stamping a
+# release is a release-tooling job, and code that guesses a version is worse
+# than code that reports none. When there is no version we send a bare product
+# name, which is a legal (if uninformative) user agent.
+#
+our $product;
+our $product_version;
 
 #
 # Undef leaves LWP's own default in place; callers that want a short leash
@@ -43,7 +57,10 @@ tree. Two problems this addresses:
 
 The BV-BRC web sites sit behind Cloudflare, which bans the default
 C<libwww-perl> user-agent (error 1010). Every user agent must be built with
-L</new_ua> so it presents an allowlisted string.
+L</new_ua> so it presents an allowlisted string. A client that wants to be
+identifiable in its own right -- so an access log or a block can be attributed
+to it rather than to "some Perl client" -- declares itself with
+L</set_product>.
 
 =item *
 
@@ -59,26 +76,136 @@ C<--debug-http> flag on L<p3-login> does this for you).
 
 =head2 Utility Routines
 
+=head3 set_product
+
+    P3ClientUA::set_product($name, $version)
+
+Declare which product this process is, so its requests can be told apart from
+every other Perl client in the tree. C<$version> is optional; pass it only if
+something authoritative supplied it (a build stamp, a release tag), never a
+guess.
+
+    P3ClientUA::set_product("bvbrc-cli-perl", "1.2.3");   # bvbrc-cli-perl/1.2.3
+    P3ClientUA::set_product("bvbrc-cli-perl");            # bvbrc-cli-perl
+
+A product may also be declared from outside the process by setting
+C<P3_CLIENT_PRODUCT> in the environment to the whole string; that is how the
+generated C<p3-*> wrappers identify the CLI without every script having to say
+so. An explicit call here beats the environment, since an inherited value may
+have come from a parent process that is not this product.
+
+=cut
+
+sub set_product
+{
+    my($name, $version) = @_;
+
+    $product = $name;
+    $product_version = $version;
+
+    return product_string();
+}
+
+=head3 product_string
+
+    $string = P3ClientUA::product_string()
+
+The product identity as it will appear in the user agent
+(C<name/version>, or bare C<name> when no version was supplied), or undef if no
+product has been declared.
+
+=cut
+
+sub product_string
+{
+    if (defined($product) && $product =~ /\S/)
+    {
+	my $str = _header_safe($product);
+	if (defined($product_version) && $product_version =~ /\S/)
+	{
+	    $str .= "/" . _header_safe($product_version);
+	}
+	return $str;
+    }
+
+    my $env = $ENV{P3_CLIENT_PRODUCT};
+    return _header_safe($env) if defined($env) && $env =~ /\S/;
+
+    return undef;
+}
+
 =head3 user_agent_string
 
     $ua_string = P3ClientUA::user_agent_string()
 
-The agent string to present to the BV-BRC services. C<$FIG_Config::p3_data_api_user_agent>
-wins if set, then the C<P3_USER_AGENT> environment variable, then a built-in
-default.
+The agent string to present to the BV-BRC services. In precedence order:
+
+=over 4
+
+=item 1.
+
+The C<P3_USER_AGENT> environment variable. This is the human's escape hatch --
+per-invocation and explicit, so it wins over everything.
+
+=item 2.
+
+The product identity, from L</set_product> or C<P3_CLIENT_PRODUCT>. A client
+that says what it is knows better than a site-wide default.
+
+=item 3.
+
+C<$FIG_Config::p3_data_api_user_agent>, the site's default identity for clients
+that have none of their own.
+
+=item 4.
+
+C<$default_user_agent>.
+
+=back
+
+Note that 1 and 2 outranking 3 is deliberate, and is a change from the original
+ordering: C<p3_data_api_user_agent> is set in every deployment (to the stock
+string), so anything ranked below it could never take effect -- which made
+C<P3_USER_AGENT> look broken.
 
 =cut
 
 sub user_agent_string
 {
+    my $env = $ENV{P3_USER_AGENT};
+    return _header_safe($env) if defined($env) && $env =~ /\S/;
+
+    my $prod = product_string();
+    return $prod if defined($prod);
+
     #
     # Read FIG_Config defensively; this module is in p3_auth, which does not
     # depend on p3_core, so FIG_Config may never have been loaded.
     #
     no strict 'refs';
     my $configured = ${"FIG_Config::p3_data_api_user_agent"};
+    return _header_safe($configured) if defined($configured) && $configured =~ /\S/;
 
-    return $configured || $ENV{P3_USER_AGENT} || $default_user_agent;
+    return $default_user_agent;
+}
+
+#
+# A user agent string becomes a header value, and these strings come from the
+# environment. Strip the control characters that would let one inject a header,
+# and trim: a stray newline out of a shell variable would otherwise be a
+# request-splitting bug rather than a cosmetic one.
+#
+sub _header_safe
+{
+    my($str) = @_;
+
+    return undef unless defined $str;
+
+    $str =~ s/[\x00-\x1f\x7f]+/ /g;
+    $str =~ s/^\s+//;
+    $str =~ s/\s+$//;
+
+    return $str;
 }
 
 =head3 new_ua
