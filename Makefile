@@ -7,6 +7,25 @@ SRC_PERL = $(wildcard scripts/*.pl)
 BIN_PERL = $(addprefix $(BIN_DIR)/,$(basename $(notdir $(SRC_PERL))))
 LIB_PERL = $(wildcard Bio-KBase-Auth/lib/Bio/KBase/*.pm)
 
+#
+# Identify these tools to the BV-BRC services. Every generated wrapper exports
+# P3_CLIENT_PRODUCT, which P3ClientUA turns into the User-Agent, so a login
+# attempt is distinguishable from any other Perl client in the tree -- in an
+# access log, and in a Cloudflare block report. That matters most here: the
+# login path is where an edge rejection is hardest to tell from a bad password.
+#
+# The version is intentionally not specified in this repository -- stamping a
+# release is a release-tooling job. Supply it at build time:
+#
+#	make P3_AUTH_VERSION=1.2.3	=>	bvbrc-auth-perl/1.2.3
+#	make				=>	bvbrc-auth-perl
+#
+P3_AUTH_PRODUCT = bvbrc-auth-perl
+P3_AUTH_VERSION ?=
+
+export P3_CLIENT_PRODUCT = $(P3_AUTH_PRODUCT)$(if $(strip $(P3_AUTH_VERSION)),/$(strip $(P3_AUTH_VERSION)))
+export WRAP_VARIABLES = P3_CLIENT_PRODUCT
+
 GLOBUS_TOKEN_URL = http://rast.nmpdr.org/goauth/token?grant_type=client_credentials
 GLOBUS_PROFILE_URL = http://rast.nmpdr.org/users
 TRUST_TOKEN_SIGNERS = https://rast.nmpdr.org/goauth/keys https://user.alpha.patricbrc.org/public_key https://nexus.api.globusonline.org/goauth/keys https://user.patricbrc.org/public_key https://user.beta.patricbrc.org/public_key
@@ -46,6 +65,15 @@ SERVICE_DIR = $(TARGET)/services/$(SERVICE)
 all: build-libs bin
 
 bin: $(BIN_PERL)
+
+#
+# P3_CLIENT_PRODUCT is baked into each wrapper when it is generated, so a change
+# to it has to force the wrappers to be rebuilt; otherwise an existing tree keeps
+# announcing the old identity until someone empties bin/ by hand.
+#
+# This has to come after "all", or it would take over as make's default goal.
+#
+$(BIN_PERL): Makefile
 
 deploy: deploy-client
 deploy-client: build-libs deploy-libs deploy-scripts
