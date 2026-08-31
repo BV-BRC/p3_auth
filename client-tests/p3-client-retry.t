@@ -474,4 +474,82 @@ SKIP: {
     close($listener);
 }
 
+#
+# detect_truncated_body: LWP does not notice a body that stops short of its
+# Content-Length. Verified against a real short read further down -- 200 OK,
+# full Content-Length, no X-Died, no Client-Aborted, no Client-Warning. A
+# caller trusting is_success writes a truncated file and reports success.
+#
+{
+    my $full = HTTP::Response->new(200, 'OK',
+				   HTTP::Headers->new('Content-Length' => 5), 'hello');
+    is(P3ClientUA::detect_truncated_body($full), $full,
+       'a complete body is returned unchanged');
+
+    my $short = HTTP::Response->new(200, 'OK',
+				    HTTP::Headers->new('Content-Length' => 1000), 'x' x 400);
+    my $flagged = P3ClientUA::detect_truncated_body($short);
+    isnt($flagged, $short, 'a short body is replaced');
+    is($flagged->code, 502, 'a short body becomes a 502');
+    like($flagged->message, qr/received 400 of 1000/, 'the shortfall is named');
+    is(P3ClientUA::classify_response($flagged), P3ClientUA::MAYBE_SENT,
+       'a truncated body is retryable');
+
+    is(P3ClientUA::detect_truncated_body($short, 1000)->code, 200,
+       'an explicit received count is what is compared (content_cb case)');
+    is(P3ClientUA::detect_truncated_body($short, 400)->code, 502,
+       'an explicit short count is caught');
+
+    my $chunked = HTTP::Response->new(200, 'OK',
+				      HTTP::Headers->new('Transfer-Encoding' => 'chunked'), 'partial');
+    is(P3ClientUA::detect_truncated_body($chunked)->code, 200,
+       'no Content-Length means nothing to compare against');
+
+    my $err = HTTP::Response->new(500, 'Internal Server Error',
+				  HTTP::Headers->new('Content-Length' => 1000), 'x');
+    is(P3ClientUA::detect_truncated_body($err)->code, 500,
+       'a failure response is left alone for the classifier to judge');
+}
+
+#
+# And the behaviour that makes the above necessary, against a live socket: a
+# server that closes mid-body. If LWP ever starts flagging this, this test
+# fails and detect_truncated_body can be reconsidered.
+#
+SKIP: {
+    eval { require IO::Socket::INET; 1 } or skip("IO::Socket::INET unavailable", 3);
+
+    my $srv = IO::Socket::INET->new(LocalAddr => '127.0.0.1', Listen => 5,
+				    ReuseAddr => 1, Proto => 'tcp')
+	or skip("cannot bind a loopback listener", 3);
+    my $port = $srv->sockport;
+
+    my $pid = fork();
+    defined($pid) or skip("cannot fork", 3);
+    if (!$pid)
+    {
+	my $c = $srv->accept;
+	if ($c)
+	{
+	    while (my $l = <$c>) { last if $l =~ /^\r?$/ }
+	    print $c "HTTP/1.1 200 OK\r\nContent-Length: 1000\r\nConnection: close\r\n\r\n";
+	    print $c ('x' x 400);
+	    close($c);
+	}
+	exit 0;
+    }
+
+    my $ua = P3ClientUA::new_ua(timeout => 10);
+    my $got = 0;
+    my $res = $ua->request(HTTP::Request::Common::GET("http://127.0.0.1:$port/f"),
+			   sub { $got += length($_[0]) });
+    waitpid($pid, 0);
+    close($srv);
+
+    is($got, 400, 'the server delivered 400 of the 1000 bytes it promised');
+    ok($res->is_success, 'LWP reports a truncated body as a success (this is the defect)');
+    is(P3ClientUA::detect_truncated_body($res, $got)->code, 502,
+       'detect_truncated_body catches what LWP did not');
+}
+
 done_testing();

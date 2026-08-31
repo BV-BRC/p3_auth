@@ -2,12 +2,14 @@ package P3ClientUA;
 
 use strict;
 use LWP::UserAgent;
+use HTTP::Response;
 use Exporter 'import';
 
 our @EXPORT_OK = qw(new_ua user_agent_string debug_enabled
 		    is_cloudflare_block http_failure_message dump_http_failure
 		    is_cloudflare_policy_block classify_response retry_request
 		    retry_after_seconds retry_disabled backoff_delay
+		    detect_truncated_body
 		    NO_RETRY NEVER_SENT MAYBE_SENT);
 
 #
@@ -520,6 +522,49 @@ sub is_cloudflare_policy_block
     return 1 if $body =~ /Error\s+(?:code)?\s*:?\s*10\d\d|Attention Required|cf-error-details|__cf_chl/i;
 
     return 0;
+}
+
+=head3 detect_truncated_body
+
+    $res = P3ClientUA::detect_truncated_body($res)
+    $res = P3ClientUA::detect_truncated_body($res, $bytes_received)
+
+Returns C<$res> unchanged, unless the body came up short of the
+C<Content-Length> the server promised -- in which case it returns a synthesized
+502 naming the shortfall, which L</classify_response> treats as C<MAYBE_SENT>
+and so retries.
+
+This exists because LWP does not notice. Measured against a server that closes
+the connection mid-body: the response is C<200 OK>, carries the full
+C<Content-Length>, and has no C<X-Died>, C<Client-Aborted> or C<Client-Warning>
+header of any kind. A caller that trusts C<is_success> writes a truncated file
+and reports success -- worse than a failed download, because nothing downstream
+can tell.
+
+Pass C<$bytes_received> when the body went to a C<:content_cb> and so is not in
+C<$res>; it defaults to the length of the response content. A response with no
+C<Content-Length> (a chunked transfer) cannot be checked this way and is
+returned unchanged.
+
+=cut
+
+sub detect_truncated_body
+{
+    my($res, $received) = @_;
+
+    return $res unless $res && $res->is_success;
+
+    my $want = $res->content_length;
+    return $res unless defined($want);
+
+    $received = length($res->content // '') unless defined($received);
+    return $res if $received >= $want;
+
+    my $short = HTTP::Response->new(502, "Truncated response body: received $received of $want bytes",
+				    $res->headers->clone);
+    $short->request($res->request) if $res->request;
+
+    return $short;
 }
 
 =head3 retry_after_seconds
