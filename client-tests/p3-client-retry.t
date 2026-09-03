@@ -188,6 +188,48 @@ is(P3ClientUA::classify_response(
        "NO_RETRY: a 500 with no body");
 }
 
+{
+    #
+    # The same outage without a status line to quote: the connection to the
+    # database died mid-request, so there was no HTML error page for the API to
+    # wrap -- only node's own socket error. Body observed verbatim from
+    # www.bv-brc.org 2026-09-03, partway through a 786-batch md5 lookup.
+    #
+    my $hangup = '{"status":500,"message":"Unable to request the database. ' .
+	'Error: socket hang up"}';
+
+    my $res = HTTP::Response->new(500, 'Internal Server Error',
+				  HTTP::Headers->new('Content-Type' => 'application/json'),
+				  $hangup);
+    is(P3ClientUA::classify_response($res), P3ClientUA::MAYBE_SENT,
+       "MAYBE_SENT: a 500 wrapping a dropped backend socket");
+
+    for my $body ('{"status":500,"message":"Unable to request the database. Error: read ECONNRESET"}',
+		  '{"status":500,"message":"Unable to request the database. Error: write EPIPE"}')
+    {
+	my $r = HTTP::Response->new(500, 'Internal Server Error',
+				    HTTP::Headers->new('Content-Type' => 'application/json'),
+				    $body);
+	is(P3ClientUA::classify_response($r), P3ClientUA::MAYBE_SENT,
+	   "MAYBE_SENT: 500 wrapping " . ($body =~ /(ECONNRESET|EPIPE)/)[0]);
+    }
+
+    #
+    # Keyed off the transport error, never off the API's generic wrapper: the
+    # same "Unable to request the database" prefix fronts permanent failures
+    # such as a malformed query, and retrying those never succeeds.
+    #
+    for my $body ('{"status":500,"message":"Unable to request the database. Error: undefined field object"}',
+		  '{"status":500,"message":"Unable to request the database."}')
+    {
+	my $r = HTTP::Response->new(500, 'Internal Server Error',
+				    HTTP::Headers->new('Content-Type' => 'application/json'),
+				    $body);
+	is(P3ClientUA::classify_response($r), P3ClientUA::NO_RETRY,
+	   "NO_RETRY: 500 from the database with no transport error: $body");
+    }
+}
+
 is(P3ClientUA::classify_response(HTTP::Response->new(200, 'OK')), P3ClientUA::NO_RETRY,
    "NO_RETRY: success");
 

@@ -464,6 +464,25 @@ sub classify_response
     }
 
     #
+    # The same family again, now without requiring us to have recognized the
+    # edge. _looks_like_cloudflare wants a Server: cloudflare or a CF-Ray
+    # header, and on 2026-09-03 a wedged API tier produced 524s that did not
+    # satisfy it: the body was the bare text/plain "error code: 524" (the same
+    # shape CLAUDE.md records for the 1010 rule), 524 is absent from the
+    # explicit list below, and so eleven BLAST genera were classified NO_RETRY
+    # and died on a condition that is transient by definition.
+    #
+    # 520-527 and 530 are non-standard codes essentially nothing but Cloudflare
+    # emits, and every one of them describes the edge failing to get a good
+    # answer out of our origin -- precisely what a retry is for. Falling through
+    # to here costs only the sharper NEVER_SENT claim above: without the header
+    # we cannot prove the request was never delivered, so we say MAYBE_SENT and
+    # let an idempotent_only caller opt out. That is strictly more conservative
+    # than the header-confirmed path and never less safe than NO_RETRY.
+    #
+    return MAYBE_SENT if $cf_never_sent{$code} || $cf_maybe_sent{$code};
+
+    #
     # The BV-BRC data API answers a backend outage with its own 500 carrying the
     # real 503 quoted in the message, so the transient failure arrives wearing
     # the status code we most need to keep out of the retry path. Unwrap it.
@@ -530,6 +549,28 @@ sub _wraps_upstream_5xx
     return 1 if $body =~ /\b502\s+Bad\s+Gateway/i;
     return 1 if $body =~ /\b503\s+Service\s+(?:Unavailable|Temporarily)/i;
     return 1 if $body =~ /\b504\s+Gateway\s+Time-?\s?out/i;
+
+    #
+    # The same shape without an HTTP status to quote: the backend connection
+    # died mid-request, so there was never a status line for the API to wrap.
+    # Node reports the dropped socket, and the API forwards the text:
+    #
+    #     {"status":500,"message":"Unable to request the database.
+    #      Error: socket hang up"}
+    #
+    # Seen live 2026-09-03 against www.bv-brc.org/api, partway through a
+    # 786-batch md5 lookup. This is a transport failure between the API and its
+    # database -- the definition of transient -- and it is the same class as the
+    # cases above, not a new indulgence.
+    #
+    # Matched by the node error token, not by "Unable to request the database":
+    # that prefix is the API's generic wrapper and appears on permanent errors
+    # (a malformed query) too, so keying on it would retry things that will
+    # never succeed.
+    #
+    return 1 if $body =~ /\bsocket\s+hang\s+up\b/i;
+    return 1 if $body =~ /\bECONNRESET\b/;
+    return 1 if $body =~ /\bEPIPE\b/;
 
     return 0;
 }
