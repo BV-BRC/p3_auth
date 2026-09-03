@@ -464,6 +464,13 @@ sub classify_response
     }
 
     #
+    # The BV-BRC data API answers a backend outage with its own 500 carrying the
+    # real 503 quoted in the message, so the transient failure arrives wearing
+    # the status code we most need to keep out of the retry path. Unwrap it.
+    #
+    return MAYBE_SENT if $code == 500 && _wraps_upstream_5xx($res);
+
+    #
     # 429 reaches here rather than being treated as a Cloudflare mitigation: it
     # is the one edge response that means "not now" rather than "not ever", and
     # it usually carries a Retry-After saying exactly how long.
@@ -472,6 +479,59 @@ sub classify_response
 	|| $code == 502 || $code == 503 || $code == 504;
 
     return NO_RETRY;
+}
+
+=head3 _wraps_upstream_5xx
+
+True when an origin 5xx is a wrapper around a transient failure further back,
+rather than the origin's own defect. The case this exists for is the data API
+returning
+
+    {"status":500,"message":"Unable to parse the query response.
+     <html><body><h1>503 Service Unavailable</h1>
+     No server is available to handle this request.</body></html>"}
+
+when its Solr nodes are down: the API proxies to a load balancer, fails to parse
+the balancer's HTML error page as a query result, and reports that parse failure
+as a 500 of its own. A query-node restart fixes it in seconds, but classified on
+the status code alone it is a genuine origin 500 and never retried -- which is
+how a node outage killed both BLAST build drivers outright rather than stalling
+them.
+
+Deliberately narrow. It requires an embedded upstream status B<line> -- a 502,
+503 or 504 in an HTML heading or status position -- or haproxy's distinctive
+"no server is available" text. A 500 whose body merely mentions one of those
+numbers does not match, because the cost of a false positive here is hammering
+an origin that is already failing.
+
+=cut
+
+sub _wraps_upstream_5xx
+{
+    my($res) = @_;
+
+    return 0 unless $res;
+
+    my $body = eval { $res->decoded_content(charset => 'none') } // $res->content // '';
+    return 0 unless length $body;
+
+    #
+    # haproxy's own text, which is what the balancer in front of Solr emits and
+    # what the API quotes verbatim. Checked first because it is unambiguous.
+    #
+    return 1 if $body =~ /No server is available to handle this request/i;
+
+    #
+    # An embedded status line: "<h1>503 Service Unavailable</h1>", or the same
+    # pair at the head of a quoted plain-text response. Requiring the reason
+    # phrase alongside the code is what keeps this from matching a 500 that
+    # happens to contain the digits.
+    #
+    return 1 if $body =~ /\b502\s+Bad\s+Gateway/i;
+    return 1 if $body =~ /\b503\s+Service\s+(?:Unavailable|Temporarily)/i;
+    return 1 if $body =~ /\b504\s+Gateway\s+Time-?\s?out/i;
+
+    return 0;
 }
 
 sub _looks_like_cloudflare

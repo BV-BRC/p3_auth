@@ -128,6 +128,66 @@ is(P3ClientUA::classify_response(
        "NO_RETRY: a genuine 500 from the origin");
 }
 
+{
+    #
+    # The data API wraps a backend outage in a 500 of its own: it proxies to a
+    # load balancer, cannot parse the balancer's HTML error page as a query
+    # result, and reports that parse failure. The body is the verbatim response
+    # observed from www.bv-brc.org while the Solr query nodes were down. A
+    # restart fixes it in seconds, so this must not be classified with the
+    # genuine origin 500 above -- doing so killed both BLAST build drivers.
+    #
+    my $wrapped = '{"status":500,"message":"Unable to parse the query response. ' .
+	'<html><body><h1>503 Service Unavailable</h1>\nNo server is available ' .
+	'to handle this request.\n</body></html>"}';
+
+    my $res = HTTP::Response->new(500, 'Internal Server Error',
+				  HTTP::Headers->new('Content-Type' => 'application/json'),
+				  $wrapped);
+    is(P3ClientUA::classify_response($res), P3ClientUA::MAYBE_SENT,
+       "MAYBE_SENT: a 500 wrapping a backend 503");
+
+    #
+    # Either marker alone is enough; the live body happens to carry both.
+    #
+    for my $body ('<html><body><h1>503 Service Unavailable</h1></body></html>',
+		  'No server is available to handle this request.',
+		  '<h1>502 Bad Gateway</h1>',
+		  '<h1>504 Gateway Time-out</h1>')
+    {
+	my $r = HTTP::Response->new(500, 'Internal Server Error',
+				    HTTP::Headers->new('Content-Type' => 'text/html'),
+				    $body);
+	is(P3ClientUA::classify_response($r), P3ClientUA::MAYBE_SENT,
+	   "MAYBE_SENT: 500 wrapping " . substr($body, 0, 40));
+    }
+
+    #
+    # The unwrapping is narrow on purpose. An origin 500 that merely mentions
+    # one of those numbers is still an origin 500, and retrying it hammers a
+    # service that is already failing.
+    #
+    for my $body ('{"error":"row 503 of the input is malformed"}',
+		  '{"error":"boom","code":502}',
+		  '{"error":"expected 504 records, got 3"}')
+    {
+	my $r = HTTP::Response->new(500, 'Internal Server Error',
+				    HTTP::Headers->new('Content-Type' => 'application/json'),
+				    $body);
+	is(P3ClientUA::classify_response($r), P3ClientUA::NO_RETRY,
+	   "NO_RETRY: 500 merely mentioning a 5xx number: $body");
+    }
+
+    #
+    # And an empty body cannot be evidence of anything.
+    #
+    is(P3ClientUA::classify_response(
+	   HTTP::Response->new(500, 'Internal Server Error',
+			       HTTP::Headers->new('Content-Type' => 'text/plain'), '')),
+       P3ClientUA::NO_RETRY,
+       "NO_RETRY: a 500 with no body");
+}
+
 is(P3ClientUA::classify_response(HTTP::Response->new(200, 'OK')), P3ClientUA::NO_RETRY,
    "NO_RETRY: success");
 
