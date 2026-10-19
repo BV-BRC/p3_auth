@@ -7,7 +7,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 40;
+use Test::More tests => 43;
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
@@ -109,7 +109,7 @@ sub with_clean_ua_state(&)
 }
 
 with_clean_ua_state {
-    is(P3ClientUA::user_agent_string(), 'BV-BRC P3 Client', 'with nothing set, the built-in default is used');
+    is(P3ClientUA::user_agent_string(), 'bvbrc-client-perl', 'with nothing set, the built-in default is used');
     is(P3ClientUA::product_string(), undef, 'no product declared means no product string');
 };
 
@@ -119,7 +119,7 @@ with_clean_ua_state {
 };
 
 with_clean_ua_state {
-    $FIG_Config::p3_data_api_user_agent = 'BV-BRC P3 Client';
+    $FIG_Config::p3_data_api_user_agent = 'bvbrc-client-perl';
     P3ClientUA::set_product('bvbrc-cli-perl');
     is(P3ClientUA::user_agent_string(), 'bvbrc-cli-perl',
        'a declared product outranks the site default (which is set in every deployment)');
@@ -148,9 +148,27 @@ with_clean_ua_state {
        'an explicit set_product beats an inherited P3_CLIENT_PRODUCT');
 };
 
+#
+# The Cloudflare rule admits the bvbrc-* family. A default that does not match
+# it would be refused at the edge by every client that declares no product --
+# which is most of them -- so pin it rather than trusting a code review.
+#
+with_clean_ua_state {
+    like($P3ClientUA::default_user_agent, qr/^bvbrc-/,
+         'the fallback identity is in the bvbrc-* family the Cloudflare rule admits');
+    like(P3ClientUA::user_agent_string(), qr/^bvbrc-/,
+         'a client that declares nothing still sends a bvbrc-* agent');
+};
+
+with_clean_ua_state {
+    P3ClientUA::set_product('bvbrc-app-perl');
+    like(P3ClientUA::user_agent_string(), qr/^bvbrc-/,
+         'a declared product is in the family too');
+};
+
 with_clean_ua_state {
     $ENV{P3_CLIENT_PRODUCT} = '   ';
-    is(P3ClientUA::user_agent_string(), 'BV-BRC P3 Client', 'a blank P3_CLIENT_PRODUCT is ignored');
+    is(P3ClientUA::user_agent_string(), 'bvbrc-client-perl', 'a blank P3_CLIENT_PRODUCT is ignored');
 };
 
 with_clean_ua_state {
@@ -222,7 +240,7 @@ like($auth_msg, qr/CF-Ray abc123-ORD/, 'the Ray id is reported even when it is n
 #
 my $req = HTTP::Request->new(POST => 'https://user.patricbrc.org/authenticate',
 			     HTTP::Headers->new('Content-Type' => 'application/x-www-form-urlencoded',
-						'User-Agent' => 'BV-BRC P3 Client'),
+						'User-Agent' => 'bvbrc-client-perl'),
 			     'username=someone&password=hunter2');
 $req->authorization_basic('someone', 'hunter2');
 

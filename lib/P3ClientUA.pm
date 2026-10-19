@@ -20,7 +20,14 @@ our @EXPORT_OK = qw(new_ua user_agent_string set_product product_string debug_en
 # This is the fallback identity, used by any client that has not said which
 # product it is (see set_product).
 #
-our $default_user_agent = "BV-BRC P3 Client";
+# It must begin with "bvbrc-", and so must every product name. The agreement
+# with the Cloudflare administrator is that our traffic is identified by a
+# bvbrc-* agent and a rule admits that family -- so this is an allowlist, and
+# the old "BV-BRC P3 Client" would not match it. (As of 2026-10-19 the live
+# configuration is still the older block-list of known library agents, under
+# which both strings pass; do not take that as evidence this is cosmetic.)
+#
+our $default_user_agent = "bvbrc-client-perl";
 
 #
 # The product making the request, e.g. "bvbrc-cli-perl", and its version.
